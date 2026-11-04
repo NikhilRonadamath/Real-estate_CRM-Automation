@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+requests
+google-auth
+google-genai
+python-dotenv
+pydantic
+email-validator
+groq
+twilio
