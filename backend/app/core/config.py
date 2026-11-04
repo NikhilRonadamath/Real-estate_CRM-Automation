@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BACKEND_DIR / ".env", override=True)
-
+FIREBASE_SERVICE_ACCOUNT_JSON: str = os.getenv(
+    "FIREBASE_SERVICE_ACCOUNT_JSON", ""
+)
 
 class Settings:
 	APP_NAME: str = os.getenv("APP_NAME", "AI Lead Recovery Engine")
