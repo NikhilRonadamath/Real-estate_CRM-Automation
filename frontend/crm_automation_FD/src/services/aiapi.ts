@@ -46,8 +46,7 @@ export async function getSavedAIAnalysis(
   leadId: string,
 ): Promise<SavedAIAnalysisResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/ai/leads/${encodeURIComponent(leadId)}/analysis`,
-  )
+`${API_BASE_URL}/api/ai/leads/${encodeURIComponent(leadId)}/analysis`  )
 
   if (!response.ok) {
     throw new Error('Unable to load saved AI analysis')
@@ -60,7 +59,7 @@ export async function analyzeLead(
   leadId: string,
 ): Promise<SavedAIAnalysisResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/ai/leads/${encodeURIComponent(leadId)}/analyze`,
+    `${API_BASE_URL}/api/ai/leads/${encodeURIComponent(leadId)}/analyze`,
     { method: 'POST' },
   )
 
