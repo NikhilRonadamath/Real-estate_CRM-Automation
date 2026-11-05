@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from app.services.whatsapp_service import send_welcome_message
 
 from app.core.config import settings
 from app.integrations.firebase import DOCUMENTS_URL, firestore_request
@@ -91,16 +92,31 @@ def create_lead(lead_data: dict) -> dict:
 		}
 	)
 	firestore_request(
-		"POST",
-		f"{DOCUMENTS_URL}/{COLLECTION}",
-		params={"documentId": lead_id},
-		json={"fields": encode_fields(lead_data)},
-	)
-	return {
-		"success": True,
-		"message": "Lead registered successfully",
-		"lead_id": lead_id,
-	}
+    "POST",
+    f"{DOCUMENTS_URL}/{COLLECTION}",
+    params={"documentId": lead_id},
+    json={"fields": encode_fields(lead_data)},
+)
+
+# Automatically start WhatsApp communication for every new lead.
+whatsapp_result = None
+
+try:
+    whatsapp_result = send_welcome_message(
+        name=lead_data["name"],
+        phone=lead_data["phone"],
+    )
+
+except Exception as error:
+    # The lead should still be created even if WhatsApp temporarily fails.
+    print(f"WhatsApp message failed for {lead_id}: {error}")
+
+return {
+    "success": True,
+    "message": "Lead registered successfully",
+    "lead_id": lead_id,
+    "whatsapp": whatsapp_result,
+}
 
 
 def get_leads() -> list[dict]:
