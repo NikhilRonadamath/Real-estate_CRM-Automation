@@ -1,10 +1,10 @@
 import uuid
 from datetime import datetime, timezone
 
-from app.services.whatsapp_service import send_welcome_message
 from app.core.config import settings
 from app.integrations.firebase import DOCUMENTS_URL, firestore_request
 from app.models.lead import LeadCreate
+from app.services.whatsapp_service import send_welcome_message
 
 
 COLLECTION = settings.FIREBASE_COLLECTION
@@ -24,33 +24,56 @@ def encode_value(value):
     if isinstance(value, dict):
         return {"mapValue": {"fields": encode_fields(value)}}
     if isinstance(value, list):
-        return {"arrayValue": {"values": [encode_value(item) for item in value]}}
-    raise ValueError(f"Unsupported Firestore value: {type(value).__name__}")
+        return {
+            "arrayValue": {
+                "values": [encode_value(item) for item in value]
+            }
+        }
+
+    raise ValueError(
+        f"Unsupported Firestore value: {type(value).__name__}"
+    )
 
 
 def encode_fields(data: dict) -> dict:
-    return {key: encode_value(value) for key, value in data.items()}
+    return {
+        key: encode_value(value)
+        for key, value in data.items()
+    }
 
 
 def decode_value(value):
     for key, decoded in value.items():
         if key == "nullValue":
             return None
+
         if key == "integerValue":
             return int(decoded)
+
         if key == "doubleValue":
             return float(decoded)
-        if key in {"stringValue", "booleanValue", "timestampValue"}:
+
+        if key in {
+            "stringValue",
+            "booleanValue",
+            "timestampValue",
+        }:
             return decoded
+
         if key == "mapValue":
-            return decode_fields(decoded.get("fields", {}))
+            return decode_fields(
+                decoded.get("fields", {})
+            )
+
         if key == "arrayValue":
             return [
                 decode_value(item)
                 for item in decoded.get("values", [])
             ]
+
         if key == "geoPointValue":
             return decoded
+
     return None
 
 
@@ -62,6 +85,7 @@ def decode_fields(fields: dict) -> dict:
 
 
 def create_lead(lead_data: dict) -> dict:
+    # Generate a unique lead ID.
     lead_id = f"LEAD_{uuid.uuid4().hex[:12].upper()}"
 
     now = (
@@ -70,6 +94,7 @@ def create_lead(lead_data: dict) -> dict:
         .replace("+00:00", "Z")
     )
 
+    # Add system-generated fields.
     lead_data.update(
         {
             "lead_id": lead_id,
@@ -81,26 +106,26 @@ def create_lead(lead_data: dict) -> dict:
             "created_at": now,
             "updated_at": now,
 
-            # Communication
+            # Communication settings.
             "preferred_channel": "whatsapp",
             "whatsapp_opt_in": False,
             "consent_source": None,
             "consent_recorded_at": None,
             "do_not_contact": False,
 
-            # Recovery tracking
+            # Recovery tracking.
             "recovery_attempts": 0,
             "retry_count": 0,
             "recovery_status": "not_started",
             "last_contacted_at": None,
             "next_contact_at": None,
 
-            # AI configuration
+            # AI configuration.
             "ai_status": "ready",
         }
     )
 
-    # Save the lead to Firestore first.
+    # Step 1: Save the lead to Firestore.
     firestore_request(
         "POST",
         f"{DOCUMENTS_URL}/{COLLECTION}",
@@ -108,32 +133,39 @@ def create_lead(lead_data: dict) -> dict:
         json={"fields": encode_fields(lead_data)},
     )
 
-    # Automatically send a WhatsApp welcome message.
-whatsapp_result = None
-
-print(
-    f"Lead {lead_id} created successfully. "
-    "Starting WhatsApp communication..."
-)
-
-try:
-    whatsapp_result = send_welcome_message(
-        name=lead_data["name"],
-        phone=lead_data["phone"],
+    print(
+        f"Lead {lead_id} created successfully. "
+        "Starting WhatsApp communication..."
     )
 
-    print(f"WhatsApp result for {lead_id}: {whatsapp_result}")
+    # Step 2: Automatically send WhatsApp welcome message.
+    whatsapp_result = None
 
-except Exception as error:
-    # Lead creation should not fail if WhatsApp temporarily fails.
-    print(f"WhatsApp message failed for {lead_id}: {error}")
+    try:
+        whatsapp_result = send_welcome_message(
+            name=lead_data["name"],
+            phone=lead_data["phone"],
+        )
 
-return {
-    "success": True,
-    "message": "Lead registered successfully",
-    "lead_id": lead_id,
-    "whatsapp": whatsapp_result,
-}
+        print(
+            f"WhatsApp result for {lead_id}: "
+            f"{whatsapp_result}"
+        )
+
+    except Exception as error:
+        # Don't fail lead registration if WhatsApp fails.
+        print(
+            f"WhatsApp message failed for {lead_id}: "
+            f"{error}"
+        )
+
+    # Step 3: Return the lead creation result.
+    return {
+        "success": True,
+        "message": "Lead registered successfully",
+        "lead_id": lead_id,
+        "whatsapp": whatsapp_result,
+    }
 
 
 def get_leads() -> list[dict]:
@@ -155,11 +187,15 @@ def get_leads() -> list[dict]:
         page = response.json()
 
         for document in page.get("documents", []):
-            lead = decode_fields(document.get("fields", {}))
+            lead = decode_fields(
+                document.get("fields", {})
+            )
+
             lead_id = (
                 lead.get("lead_id")
                 or document.get("name", "").rsplit("/", 1)[-1]
             )
+
             lead.setdefault("lead_id", lead_id)
             lead["id"] = lead_id
             leads.append(lead)
@@ -177,7 +213,10 @@ def get_lead(lead_id: str):
     )
 
     document = response.json()
-    lead = decode_fields(document.get("fields", {}))
+
+    lead = decode_fields(
+        document.get("fields", {})
+    )
 
     lead_id_value = (
         lead.get("lead_id")
