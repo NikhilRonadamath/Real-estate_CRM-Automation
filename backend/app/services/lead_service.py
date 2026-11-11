@@ -109,23 +109,31 @@ def create_lead(lead_data: dict) -> dict:
     )
 
     # Automatically send a WhatsApp welcome message.
-    whatsapp_result = None
+whatsapp_result = None
 
-    try:
-        whatsapp_result = send_welcome_message(
-            name=lead_data["name"],
-            phone=lead_data["phone"],
-        )
-    except Exception as error:
-        # Lead creation should not fail if WhatsApp has a temporary issue.
-        print(f"WhatsApp message failed for {lead_id}: {error}")
+print(
+    f"Lead {lead_id} created successfully. "
+    "Starting WhatsApp communication..."
+)
 
-    return {
-        "success": True,
-        "message": "Lead registered successfully",
-        "lead_id": lead_id,
-        "whatsapp": whatsapp_result,
-    }
+try:
+    whatsapp_result = send_welcome_message(
+        name=lead_data["name"],
+        phone=lead_data["phone"],
+    )
+
+    print(f"WhatsApp result for {lead_id}: {whatsapp_result}")
+
+except Exception as error:
+    # Lead creation should not fail if WhatsApp temporarily fails.
+    print(f"WhatsApp message failed for {lead_id}: {error}")
+
+return {
+    "success": True,
+    "message": "Lead registered successfully",
+    "lead_id": lead_id,
+    "whatsapp": whatsapp_result,
+}
 
 
 def get_leads() -> list[dict]:
