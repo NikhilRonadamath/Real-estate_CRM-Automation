@@ -1,11 +1,14 @@
+from datetime import datetime, timezone
 from urllib.parse import parse_qs
 from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
-from app.services.lead_service import find_lead_by_phone
-from app.services.whatsapp_ai_service import generate_whatsapp_reply
+from app.services.lead_service import (
+    get_lead_by_phone,
+    update_lead,
+)
 
 
 router = APIRouter(
@@ -16,6 +19,8 @@ router = APIRouter(
 
 @router.post("/webhook")
 async def whatsapp_webhook(request: Request):
+    """Receive incoming WhatsApp messages from Twilio."""
+
     raw_body = await request.body()
     form_data = parse_qs(raw_body.decode("utf-8"))
 
@@ -23,41 +28,60 @@ async def whatsapp_webhook(request: Request):
     incoming_message = form_data.get("Body", [""])[0]
     message_sid = form_data.get("MessageSid", [""])[0]
 
-    print("Incoming WhatsApp message")
+    print("\n--- Incoming WhatsApp Message ---")
     print("Sender:", sender)
     print("Message:", incoming_message)
     print("Message SID:", message_sid)
 
-    # Find the lead associated with the WhatsApp number.
-    lead = find_lead_by_phone(sender)
+    # Find the lead using the sender's WhatsApp number.
+    lead = get_lead_by_phone(sender)
 
     if lead:
-        print(
-            f"Lead found: {lead.get('name')} "
-            f"({lead.get('lead_id')})"
-        )
-    else:
-        print("No existing lead found for this phone number.")
+        lead_id = lead["lead_id"]
 
-    try:
-        # Generate a personalized AI response.
-        reply_text = generate_whatsapp_reply(
-            lead=lead,
-            incoming_message=incoming_message,
+        now = (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
         )
 
-        print("AI response:", reply_text)
+        updated_lead = update_lead(
+            lead_id,
+            {
+                # AI becomes active once the user starts interacting.
+                "ai_enabled": True,
+                "ai_status": "active",
 
-    except Exception as error:
-        print(f"AI response generation failed: {error}")
+                # Lead communication status.
+                "status": "engaged",
+                "preferred_channel": "whatsapp",
 
-        # Safe fallback if the AI service is unavailable.
+                # Track the latest communication.
+                "last_contacted_at": now,
+                "last_message": incoming_message,
+                "last_message_at": now,
+            },
+        )
+
+        print(f"Lead found: {lead_id}")
+        print("Lead successfully updated in Firestore")
+        print("New status:", updated_lead.get("status"))
+
         reply_text = (
-            "Thanks for your message! Our team has received it "
-            "and will get back to you shortly."
+            f"Hi {lead.get('name', '')}! Thanks for your response. "
+            "I'm here to help with your property requirements. "
+            "Could you tell me a little more about what you're looking to do?"
         )
 
-    # Send the response back through Twilio using TwiML.
+    else:
+        print(f"No lead found for phone number: {sender}")
+
+        reply_text = (
+            "Hello! Thanks for contacting our Real Estate team. "
+            "Could you please share your name and property details?"
+        )
+
+    # Return TwiML so Twilio sends the response.
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"

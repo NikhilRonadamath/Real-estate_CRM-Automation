@@ -249,6 +249,50 @@ def get_lead(lead_id: str):
 
     return lead
 
+def get_lead_by_phone(phone: str):
+    """Find a lead using its registered phone number."""
+
+    # Normalize WhatsApp format.
+    normalized_phone = phone.replace("whatsapp:", "").strip()
+
+    leads = get_leads()
+
+    for lead in leads:
+        lead_phone = str(lead.get("phone", "")).strip()
+
+        if lead_phone == normalized_phone:
+            return lead
+
+    return None
+
+def update_lead(lead_id: str, updates: dict):
+    """Update selected fields for an existing lead."""
+
+    now = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+    updates["updated_at"] = now
+
+    response = firestore_request(
+        "PATCH",
+        f"{DOCUMENTS_URL}/{COLLECTION}/{lead_id}",
+        json={
+            "fields": encode_fields(updates),
+        },
+    )
+
+    document = response.json()
+
+    updated_lead = decode_fields(
+        document.get("fields", {})
+    )
+
+    updated_lead.setdefault("lead_id", lead_id)
+
+    return updated_lead
 
 class LeadService:
     @staticmethod
