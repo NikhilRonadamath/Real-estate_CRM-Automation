@@ -205,6 +205,27 @@ def get_leads() -> list[dict]:
         if not page_token:
             return leads
 
+def find_lead_by_phone(phone: str):
+    """
+    Find a lead using a WhatsApp or regular phone number.
+    """
+
+    # Remove the WhatsApp prefix from the incoming Twilio number.
+    normalized_phone = phone.replace("whatsapp:", "").strip()
+
+    # Check all leads stored in Firestore.
+    leads = get_leads()
+
+    for lead in leads:
+        lead_phone = str(lead.get("phone", "")).strip()
+
+        # Remove the prefix if it exists in the stored number.
+        lead_phone = lead_phone.replace("whatsapp:", "")
+
+        if lead_phone == normalized_phone:
+            return lead
+
+    return None
 
 def get_lead(lead_id: str):
     response = firestore_request(
@@ -241,3 +262,7 @@ class LeadService:
     @staticmethod
     def get_lead(lead_id: str):
         return get_lead(lead_id)
+
+    @staticmethod
+    def find_lead_by_phone(phone: str):
+        return find_lead_by_phone(phone)
