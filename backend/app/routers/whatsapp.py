@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from app.services.lead_service import find_lead_by_phone
+from app.services.whatsapp_ai_service import generate_whatsapp_reply
 
 
 router = APIRouter(
@@ -15,7 +16,6 @@ router = APIRouter(
 
 @router.post("/webhook")
 async def whatsapp_webhook(request: Request):
-    # Twilio sends incoming messages as form-encoded data.
     raw_body = await request.body()
     form_data = parse_qs(raw_body.decode("utf-8"))
 
@@ -28,7 +28,7 @@ async def whatsapp_webhook(request: Request):
     print("Message:", incoming_message)
     print("Message SID:", message_sid)
 
-    # Find the lead associated with this WhatsApp number.
+    # Find the lead associated with the WhatsApp number.
     lead = find_lead_by_phone(sender)
 
     if lead:
@@ -36,20 +36,28 @@ async def whatsapp_webhook(request: Request):
             f"Lead found: {lead.get('name')} "
             f"({lead.get('lead_id')})"
         )
-
-        reply_text = (
-            f"Hi {lead.get('name')}! Thanks for your message. "
-            "Our team is reviewing your property details."
-        )
     else:
-        print("No lead found for this WhatsApp number.")
+        print("No existing lead found for this phone number.")
 
-        reply_text = (
-            "Hello! Thanks for contacting our Real Estate team. "
-            "How can we help you with your property today?"
+    try:
+        # Generate a personalized AI response.
+        reply_text = generate_whatsapp_reply(
+            lead=lead,
+            incoming_message=incoming_message,
         )
 
-    # Return TwiML instructions to Twilio.
+        print("AI response:", reply_text)
+
+    except Exception as error:
+        print(f"AI response generation failed: {error}")
+
+        # Safe fallback if the AI service is unavailable.
+        reply_text = (
+            "Thanks for your message! Our team has received it "
+            "and will get back to you shortly."
+        )
+
+    # Send the response back through Twilio using TwiML.
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
