@@ -1,6 +1,9 @@
 from urllib.parse import parse_qs
 from xml.sax.saxutils import escape
 
+from fastapi import APIRouter, Request
+from fastapi.responses import Response
+
 from app.services.conversation_service import (
     find_lead_by_phone,
     get_conversation_history,
@@ -20,6 +23,7 @@ router = APIRouter(
 @router.post("/webhook")
 async def whatsapp_webhook(request: Request):
 
+    # Get incoming data from Twilio.
     raw_body = await request.body()
     form_data = parse_qs(raw_body.decode("utf-8"))
 
@@ -36,63 +40,63 @@ async def whatsapp_webhook(request: Request):
     lead = find_lead_by_phone(sender)
 
     if lead:
-    lead_id = lead["lead_id"]
+        lead_id = lead["lead_id"]
 
-    # 1. Save the customer's incoming message.
-    save_message(
-        lead_id=lead_id,
-        phone=sender,
-        sender="customer",
-        message=incoming_message,
-    )
-
-    try:
-        # 2. Get the complete WhatsApp conversation.
-        conversation_history = get_conversation_history(
-            lead_id
+        # Save the customer's incoming message.
+        save_message(
+            lead_id=lead_id,
+            phone=sender,
+            sender="customer",
+            message=incoming_message,
         )
 
-        # 3. Analyze the lead using both form and conversation data.
-        analysis = analyze_lead(
-            lead,
-            conversation_history,
-        )
+        try:
+            # Get the complete conversation history.
+            conversation_history = get_conversation_history(
+                lead_id
+            )
 
-        # 4. Save the AI analysis to Firestore.
-        save_lead_ai_analysis(
-            lead_id,
-            analysis.model_dump(mode="json"),
-        )
+            # Analyze lead using form data and WhatsApp conversation.
+            analysis = analyze_lead(
+                lead,
+                conversation_history,
+            )
 
-        print(
-            f"AI analysis updated for lead {lead_id}"
-        )
+            # Save AI analysis to Firestore.
+            save_lead_ai_analysis(
+                lead_id,
+                analysis.model_dump(mode="json"),
+            )
 
-        # Temporary response based on successful analysis.
-        reply_text = (
-            f"Thanks, {lead.get('name', '')}! "
-            "I've updated your property requirements. "
-            "Our team will help you with the next steps."
-        )
+            print(
+                f"AI analysis updated successfully "
+                f"for lead {lead_id}"
+            )
 
-    except Exception as error:
-        print(
-            f"AI analysis failed for {lead_id}: {error}"
-        )
+            reply_text = (
+                f"Thanks for your response, {lead.get('name', '')}! "
+                "I've reviewed your property information. "
+                "Our team will help you with the next steps."
+            )
 
-        # The WhatsApp conversation should continue even if AI fails.
-        reply_text = (
-            "Thanks for sharing those details. "
-            "Our team has received your response."
-        )
+        except Exception as error:
+            print(
+                f"AI analysis failed for {lead_id}: {error}"
+            )
 
-    # Save the outgoing response.
-    save_message(
-        lead_id=lead_id,
-        phone=sender,
-        sender="ai",
-        message=reply_text,
-    )
+            # Continue the conversation even if AI analysis fails.
+            reply_text = (
+                "Thanks for sharing those details. "
+                "We have received your response."
+            )
+
+        # Save the outgoing response.
+        save_message(
+            lead_id=lead_id,
+            phone=sender,
+            sender="ai",
+            message=reply_text,
+        )
 
     else:
         print(
@@ -104,6 +108,7 @@ async def whatsapp_webhook(request: Request):
             "Please submit the property form first."
         )
 
+    # Send the response back to Twilio as TwiML.
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
