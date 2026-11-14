@@ -102,6 +102,52 @@ def save_message(
 
     return message_data
 
+def update_lead_with_ai_analysis(
+    lead_id: str,
+    ai_analysis: dict,
+):
+    """
+    Update the lead document with the latest AI analysis.
+    """
+
+    now = get_current_time()
+
+    update_data = {
+        "ai_enabled": True,
+        "ai_status": "analyzed",
+        "ai_analyzed_at": now,
+        "updated_at": now,
+
+        # Update important CRM fields
+        "seller_intent": ai_analysis.get(
+            "seller_intent",
+            "unknown",
+        ),
+        "lead_score": ai_analysis.get(
+            "lead_score",
+            0,
+        ),
+
+        # Store complete AI analysis
+        "ai_analysis": ai_analysis,
+    }
+
+    firestore_request(
+        "PATCH",
+        f"{DOCUMENTS_URL}/leads/{lead_id}",
+        params={
+            "updateMask.fieldPaths": list(
+                update_data.keys()
+            )
+        },
+        json={
+            "fields": encode_fields(update_data)
+        },
+    )
+
+    print(
+        f"AI analysis saved for lead {lead_id}"
+    )
 
 def get_conversation_history(lead_id: str):
     """
@@ -135,5 +181,6 @@ def get_conversation_history(lead_id: str):
             "",
         )
     )
+
 
     return messages
